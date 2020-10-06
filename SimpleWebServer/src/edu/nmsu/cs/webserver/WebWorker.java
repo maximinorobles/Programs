@@ -22,6 +22,8 @@ package edu.nmsu.cs.webserver;
  **/
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -34,20 +36,15 @@ public class WebWorker implements Runnable
 {
 
 	private Socket socket;
+	private File file;
 
-	/**
-	 * Constructor: must have a valid open socket
-	 **/
+
 	public WebWorker(Socket s)
 	{
 		socket = s;
+		file = new File("");
 	}
 
-	/**
-	 * Worker thread starting point. Each worker handles just one HTTP request and then returns, which
-	 * destroys the thread. This method assumes that whoever created the worker created it with a
-	 * valid open socket object.
-	 **/
 	public void run()
 	{
 		System.err.println("Handling connection...");
@@ -69,9 +66,6 @@ public class WebWorker implements Runnable
 		return;
 	}
 
-	/**
-	 * Read the HTTP request header.
-	 **/
 	private void readHTTPRequest(InputStream is)
 	{
 		String line;
@@ -84,8 +78,21 @@ public class WebWorker implements Runnable
 					Thread.sleep(1);
 				line = r.readLine();
 				System.err.println("Request line: (" + line + ")");
+
 				if (line.length() == 0)
 					break;
+				if(line.substring(0, 3).equals("GET"))
+				{
+					String[] parts = line.split(" ");
+					String path = "." + parts[1];
+					System.out.println(path);
+					if(path.equals("./")) 
+					{
+						System.out.println("Success!");
+						path = "./test.html"; // assigns the path to the html file
+					}
+					file = new File(path);
+				}
 			}
 			catch (Exception e)
 			{
@@ -93,48 +100,58 @@ public class WebWorker implements Runnable
 				break;
 			}
 		}
-		return;
 	}
 
-	/**
-	 * Write the HTTP header lines to the client network connection.
-	 * 
-	 * @param os
-	 *          is the OutputStream object to write to
-	 * @param contentType
-	 *          is the string MIME content type (e.g. "text/html")
-	 **/
 	private void writeHTTPHeader(OutputStream os, String contentType) throws Exception
 	{
-		Date d = new Date();
-		DateFormat df = DateFormat.getDateTimeInstance();
-		df.setTimeZone(TimeZone.getTimeZone("GMT"));
-		os.write("HTTP/1.1 200 OK\n".getBytes());
-		os.write("Date: ".getBytes());
-		os.write((df.format(d)).getBytes());
-		os.write("\n".getBytes());
-		os.write("Server: Jon's very own server\n".getBytes());
-		// os.write("Last-Modified: Wed, 08 Jan 2003 23:11:55 GMT\n".getBytes());
-		// os.write("Content-Length: 438\n".getBytes());
-		os.write("Connection: close\n".getBytes());
-		os.write("Content-Type: ".getBytes());
-		os.write(contentType.getBytes());
-		os.write("\n\n".getBytes()); // HTTP header ends with 2 newlines
-		return;
+		
+	    Date d = new Date();
+	    DateFormat df = DateFormat.getDateTimeInstance();
+	    df.setTimeZone(TimeZone.getTimeZone("GMT"));	
+	    if(file.exists() && file.isFile())
+	    {
+	        os.write("HTTP/1.1 200 OK\n".getBytes());
+	    }
+	    else
+	    {
+	        os.write("HTTP/1.1 404 Not Found\n".getBytes());
+	    }
+	    os.write("Date: ".getBytes());
+	    os.write((df.format(d)).getBytes());
+	    os.write("\n".getBytes());
+	    os.write("Server: abc's server\n".getBytes());
+	    os.write("Connection: close\n".getBytes());
+	    os.write("Content-Type: ".getBytes());
+	    os.write(contentType.getBytes());
+	    os.write("\n\n".getBytes()); // HTTP header ends with 2 newlines
+	    return;
 	}
 
-	/**
-	 * Write the data content to the client network connection. This MUST be done after the HTTP
-	 * header has been written out.
-	 * 
-	 * @param os
-	 *          is the OutputStream object to write to
-	 **/
 	private void writeContent(OutputStream os) throws Exception
 	{
-		os.write("<html><head></head><body>\n".getBytes());
-		os.write("<h3>My web server works!</h3>\n".getBytes());
-		os.write("</body></html>\n".getBytes());
+		if(!file.exists() || !file.isFile())
+		{
+			os.write("<html><head></head>".getBytes());
+			os.write("<body><h1><center>404 Error Page Not Found</center></h1></body></html>".getBytes());
+			return;
+		}
+		else // the file exists
+		{
+			BufferedReader b = new BufferedReader(new FileReader(file)); // reading contents of html file
+			String s;
+			Date  d = new Date();
+			DateFormat df = DateFormat.getDateTimeInstance();
+			df.setTimeZone(TimeZone.getTimeZone("GMT"));
+			
+			while ((s = b.readLine()) != null) // reading line by line
+			{
+				s = s.replaceAll("<cs371date>", df.format(d)); 
+				s = s.replaceAll("<cs371server>", "abc's server");
+				os.write(s.getBytes());
+			}
+			b.close();
+		}
+		
 	}
 
 } // end class
