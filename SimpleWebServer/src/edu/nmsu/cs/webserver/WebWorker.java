@@ -31,6 +31,7 @@ import java.net.Socket;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.TimeZone;
+import java.io.FileInputStream;
 
 public class WebWorker implements Runnable
 {
@@ -53,7 +54,7 @@ public class WebWorker implements Runnable
 			InputStream is = socket.getInputStream();
 			OutputStream os = socket.getOutputStream();
 			readHTTPRequest(is);
-			writeHTTPHeader(os, "text/html");
+			writeHTTPHeader(os);
 			writeContent(os);
 			os.flush();
 			socket.close();
@@ -65,8 +66,14 @@ public class WebWorker implements Runnable
 		System.err.println("Done handling connection.");
 		return;
 	}
+	
+//	private Image readImageFile(String fileName) {
+//		InputStream is = new BinaryStream();
+//	}
 
-	private void readHTTPRequest(InputStream is)
+	String contentType = "text/html"; // referring to the content type, not the file
+	
+	private void readHTTPRequest(InputStream is) // changes the content type when we're expected to deliver an image
 	{
 		String line;
 		BufferedReader r = new BufferedReader(new InputStreamReader(is));
@@ -86,11 +93,30 @@ public class WebWorker implements Runnable
 					String[] parts = line.split(" ");
 					String path = "." + parts[1];
 					System.out.println(path);
+					
+					path = path.toLowerCase();
+							
+					if(path.endsWith("gif"))
+					{
+						contentType = "image/gif";
+					}
+					
+					if(path.endsWith("jpeg"))
+					{
+						contentType = "image/jpeg";
+					}
+					
+					if(path.endsWith("png"))
+					{
+						contentType = "image/png";
+					}
+					
 					if(path.equals("./")) 
 					{
 						System.out.println("Success!");
 						path = "./test.html"; // assigns the path to the html file
 					}
+					
 					file = new File(path);
 				}
 			}
@@ -102,7 +128,7 @@ public class WebWorker implements Runnable
 		}
 	}
 
-	private void writeHTTPHeader(OutputStream os, String contentType) throws Exception
+	private void writeHTTPHeader(OutputStream os) throws Exception
 	{
 		
 	    Date d = new Date();
@@ -129,13 +155,14 @@ public class WebWorker implements Runnable
 
 	private void writeContent(OutputStream os) throws Exception
 	{
+		
 		if(!file.exists() || !file.isFile())
 		{
 			os.write("<html><head></head>".getBytes());
 			os.write("<body><h1><center>404 Error Page Not Found</center></h1></body></html>".getBytes());
 			return;
 		}
-		else // the file exists
+		else if (contentType == "text/html") // the file exists
 		{
 			BufferedReader b = new BufferedReader(new FileReader(file)); // reading contents of html file
 			String s;
@@ -150,6 +177,21 @@ public class WebWorker implements Runnable
 				os.write(s.getBytes());
 			}
 			b.close();
+		}
+		
+		else
+		{
+			FileInputStream newStream = new FileInputStream(file);
+			int bytesRead;
+			int off = 0; // start writing into the buffer at position 0 (always)
+			int len = 4000; // we want this to be as big as the buffer
+			byte[] byteArray = new byte[4000];
+			
+			while ((bytesRead = newStream.read(byteArray, off, len)) != -1) // reading line by line
+			{
+				os.write(byteArray, off, bytesRead); // we already have an array of bites, so we don't need getBytes()
+			}
+			newStream.close();
 		}
 		
 	}
